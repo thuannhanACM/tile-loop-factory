@@ -1,0 +1,15 @@
+Tile Loop Factory:
+1. Scope: 
+	a. Levels: 2 Common levels + 1 Bonus round 
+2. Core loop
+	a. Tap tile to move it to available slot in holding tray
+	b. GameOver when jamming all slots
+	c. Win level on clear all the tile
+3. Bonus level: 
+	a. start when finish the 2nd level.
+	b. One click button to sequence clear all titles
+	
+	
+	
+
+	

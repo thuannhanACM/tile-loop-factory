@@ -1,0 +1,17 @@
+Tile Loop Factory:
+1. Scope: 
+	a. Levels: 2 Common levels + 1 Bonus round 
+	b. Core loop:
+		- Tap tile to move it to available slot in holding tray
+		- collected tile will be reorder by type
+		- auto-clears 3 matched-type tiles on slots tray
+		- GameOver when jamming all slots
+		- Win level on clear all the tile
+	c. Bonus level: 
+		- start when finishs the 2nd level.
+		- One click button to sequencely clear all titles
+	
+	
+	
+
+	
