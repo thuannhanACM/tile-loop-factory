@@ -302,7 +302,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 33af07e098af3eb4bb8c5cd4e761e1c4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Core::LevelController
-  _conveyorBelt: {fileID: 1212368296758098242}
+  _conveyorBelts:
+  - {fileID: 1212368296758098242}
   _spawnInterval: 1
   _spawnDelay: 2
 --- !u!1 &7307985091946061454

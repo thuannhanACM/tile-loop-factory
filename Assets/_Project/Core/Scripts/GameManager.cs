@@ -92,7 +92,10 @@ public class GameManager : MonoBehaviour
         _currentLevelController = Instantiate(levelConfig.LevelPrefab, parent);
         _currentLevelController.Initialize(levelConfig.BuildSpawnSequence());
 
-        _currentLevelController.ConveyorBelt.TileRemoved += OnTileRemovedFromConveyor;
+        foreach (var belt in _currentLevelController.ConveyorBelts)
+        {
+            belt.TileRemoved += OnTileRemovedFromConveyor;
+        }
 
         UIManager.Instance.ShowLevelName(levelConfig.LevelName);
 
@@ -251,9 +254,10 @@ public class GameManager : MonoBehaviour
     {
         if (_currentLevelController != null)
         {
-            var belt = _currentLevelController.ConveyorBelt;
-            if (belt != null)
+            foreach (var belt in _currentLevelController.ConveyorBelts)
             {
+                if (belt == null) continue;
+
                 belt.TileRemoved -= OnTileRemovedFromConveyor;
                 belt.ReleaseAllTiles(tile => PoolObjectManager.Instance.Release(tile));
             }
