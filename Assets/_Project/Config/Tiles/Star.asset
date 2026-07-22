@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Core::TileType
   _displayName: Star
   _icon: {fileID: 21300000, guid: 5863f3f32ad6d44df95141299c02b008, type: 3}
+  _color: {r: 0.98, g: 0.82, b: 0.2, a: 1}

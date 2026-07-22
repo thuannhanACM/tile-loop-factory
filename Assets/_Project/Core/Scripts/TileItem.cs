@@ -2,18 +2,18 @@ using System;
 using DG.Tweening;
 using UnityEngine;
 
-[RequireComponent(typeof(Collider2D))]
 public class TileItem : BeltItem
 {
     [SerializeField] private SpriteRenderer _spriteRenderer;
-    [SerializeField] private TileType _type;
-
+    [SerializeField] private Renderer _renderer;
+    
+    private TileType _type;
     public TileType Type => _type;
     public event Action<TileItem> Clicked;
 
     void Start()
     {
-        ApplyIcon();
+        ApplyVisuals();
     }
 
     void OnMouseDown()
@@ -29,7 +29,14 @@ public class TileItem : BeltItem
     public void FlyTo(Vector3 targetPosition, float duration, Action onComplete = null)
     {
         transform.DOKill();
-        transform.DOMove(targetPosition, duration).OnComplete(() => onComplete?.Invoke());
+
+        var targetLocalEuler = transform.localEulerAngles;
+        targetLocalEuler.x = -90f;
+
+        var sequence = DOTween.Sequence();
+        sequence.Join(transform.DOMove(targetPosition, duration));
+        sequence.Join(transform.DOLocalRotate(targetLocalEuler, duration));
+        sequence.OnComplete(() => onComplete?.Invoke());
     }
 
     /// <summary>Pops in from scale 0 to 1 with a juicy overshoot.</summary>
@@ -65,14 +72,21 @@ public class TileItem : BeltItem
     public void SetType(TileType type)
     {
         _type = type;
-        ApplyIcon();
+        ApplyVisuals();
     }
 
-    private void ApplyIcon()
+    private void ApplyVisuals()
     {
-        if (_spriteRenderer != null && _type != null)
+        if (_type == null) return;
+
+        if (_spriteRenderer != null)
         {
             _spriteRenderer.sprite = _type.Icon;
+        }
+
+        if (_renderer != null)
+        {
+            _renderer.material.color = _type.Color;
         }
     }
 }

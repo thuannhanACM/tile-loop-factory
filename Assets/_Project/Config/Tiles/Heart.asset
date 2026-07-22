@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Core::TileType
   _displayName: Heart
   _icon: {fileID: 21300000, guid: cb067d40f32bc47a9b11a6697367400c, type: 3}
+  _color: {r: 0.93, g: 0.28, b: 0.55, a: 1}

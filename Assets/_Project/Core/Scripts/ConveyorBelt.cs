@@ -16,7 +16,6 @@ public class ConveyorBelt : MonoBehaviour
     [SerializeField] private float _nearEndPunchDuration = 0.2f;
     [SerializeField] private float _nearEndShrinkDuration = 0.2f;
 
-    private Material _material;
     private float _textureOffset;
 
     private Vector3[] _pathPoints;
@@ -49,8 +48,6 @@ public class ConveyorBelt : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        _material = _lineRenderer.material;
-
         BuildPath();
         SpawnArrow();
     }
@@ -117,7 +114,7 @@ public class ConveyorBelt : MonoBehaviour
 
             _arrowProgress[arrow] = distance;
             var point = GetPointAtDistance(distance);
-            var newPosition = new Vector3(point.x, point.y, point.z - 0.1f);
+            var newPosition = new Vector3(point.x, point.y, point.z);
 
             var direction = newPosition - arrow.transform.position;
             if (direction.sqrMagnitude > 0.0001f)
@@ -193,7 +190,7 @@ public class ConveyorBelt : MonoBehaviour
 
             _progress[tile] = distance;
             var point = GetPointAtDistance(distance);
-            tile.transform.position = new Vector3(point.x, point.y, point.z - 0.1f);
+            tile.transform.position = new Vector3(point.x, point.y, point.z);
         }
     }
 
