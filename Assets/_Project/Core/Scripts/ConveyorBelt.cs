@@ -6,9 +6,15 @@ public class ConveyorBelt : MonoBehaviour
 {
     [SerializeField] LineRenderer _lineRenderer;
     [SerializeField] float _scrollSpeed = 1f;
+    [SerializeField] private Transform _tileRoot;
     [SerializeField] private BeltItem _beltItemArrow;
     [SerializeField] private Transform _arrowRoot;
     [SerializeField] private float _arrowSpawnInterval = 2f;
+    [SerializeField] private float _spawnAnimationDuration = 0.25f;
+    [SerializeField] private float _nearEndDistance = 1f;
+    [SerializeField] private float _nearEndPunchStrength = 0.15f;
+    [SerializeField] private float _nearEndPunchDuration = 0.2f;
+    [SerializeField] private float _nearEndShrinkDuration = 0.2f;
 
     private Material _material;
     private float _textureOffset;
@@ -18,6 +24,7 @@ public class ConveyorBelt : MonoBehaviour
     private float _pathLength;
     private readonly Dictionary<TileItem, float> _progress = new();
     private readonly List<TileItem> _activeTiles = new();
+    private readonly HashSet<TileItem> _nearEndTriggered = new();
 
     private readonly Dictionary<BeltItem, float> _arrowProgress = new();
     private readonly List<BeltItem> _activeArrows = new();
@@ -36,6 +43,7 @@ public class ConveyorBelt : MonoBehaviour
 
         _activeTiles.Clear();
         _progress.Clear();
+        _nearEndTriggered.Clear();
     }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -51,9 +59,12 @@ public class ConveyorBelt : MonoBehaviour
     public void AddTile(TileItem tile)
     {
         tile.gameObject.SetActive(true);
+        tile.transform.SetParent(_tileRoot, true);
         _progress[tile] = 0f;
         _activeTiles.Add(tile);
+        _nearEndTriggered.Remove(tile);
         tile.Clicked += OnTileClicked;
+        tile.PlaySpawnAnimation(_spawnAnimationDuration);
     }
 
     // Update is called once per frame
@@ -122,6 +133,7 @@ public class ConveyorBelt : MonoBehaviour
     private void OnTileClicked(TileItem tile)
     {
         _activeTiles.Remove(tile);
+        _nearEndTriggered.Remove(tile);
         ReleaseTile(tile, TileRemovalReason.Clicked);
     }
 
@@ -168,8 +180,15 @@ public class ConveyorBelt : MonoBehaviour
             if (distance >= _pathLength)
             {
                 _activeTiles.RemoveAt(i);
+                _nearEndTriggered.Remove(tile);
                 ReleaseTile(tile, TileRemovalReason.ReachedEnd);
                 continue;
+            }
+
+            if (!_nearEndTriggered.Contains(tile) && _pathLength - distance <= _nearEndDistance)
+            {
+                _nearEndTriggered.Add(tile);
+                tile.PlayNearEndEffect(_nearEndPunchStrength, _nearEndPunchDuration, _nearEndShrinkDuration);
             }
 
             _progress[tile] = distance;
