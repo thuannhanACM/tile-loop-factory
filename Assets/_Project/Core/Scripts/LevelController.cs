@@ -7,8 +7,10 @@ public class LevelController : MonoBehaviour
     [SerializeField] private List<ConveyorBelt> _conveyorBelts = new();
     [SerializeField] private float _spawnInterval = 0.5f;
     [SerializeField] private float _spawnDelay = 0f;
+    [SerializeField] private List<TileGoalBox> _goalBoxes = new();
 
     public IReadOnlyList<ConveyorBelt> ConveyorBelts => _conveyorBelts;
+    public IReadOnlyList<TileGoalBox> GoalBoxes => _goalBoxes;
 
     private readonly Queue<TileType> _pendingTypes = new();
     private readonly List<Action<TileItem, TileRemovalReason>> _tileRemovedHandlers = new();
@@ -35,6 +37,68 @@ public class LevelController : MonoBehaviour
             _tileRemovedHandlers.Add(handler);
             _conveyorBelts[i].TileRemoved += handler;
         }
+
+        if (_goalBoxes.Count == 0)
+        {
+            GameDebug.LogWarning("_goalBoxes is empty on LevelController — there is nothing to win.", LogTopic.Gameplay);
+        }
+    }
+
+    /// <summary>
+    /// Picks the single box every tile in a match batch should fly to for the given TileType.
+    /// Among boxes tracking that type, prefers the Unlocked, not-yet-complete one closest to
+    /// completion (least remaining) so overshoot from a 3-tile match is minimized — AddProgress
+    /// itself clamps at the goal, so it never receives more than it needs. Falls back to any
+    /// same-type box (even Locked/complete) so tiles always have a real destination to fly to.
+    /// </summary>
+    public TileGoalBox PickGoalBox(TileType type)
+    {
+        TileGoalBox fallback = null;
+        TileGoalBox best = null;
+        int bestRemaining = int.MaxValue;
+
+        foreach (var box in _goalBoxes)
+        {
+            if (box == null || box.GoalType != type) continue;
+
+            fallback ??= box;
+
+            if (box.State != TileGoalBox.BoxState.Unlocked || box.IsComplete) continue;
+
+            int remaining = box.GoalAmount - box.CurrentAmount;
+            if (remaining < bestRemaining)
+            {
+                bestRemaining = remaining;
+                best = box;
+            }
+        }
+
+        return best != null ? best : fallback;
+    }
+
+    /// <summary>The win condition: every goal box in the level must be complete.</summary>
+    public bool AreAllGoalsComplete()
+    {
+        if (_goalBoxes.Count == 0) return false;
+
+        foreach (var box in _goalBoxes)
+        {
+            if (box == null || !box.IsComplete) return false;
+        }
+
+        return true;
+    }
+
+    public List<LevelGoalsView.GoalStatus> GetGoalStatuses()
+    {
+        var statuses = new List<LevelGoalsView.GoalStatus>(_goalBoxes.Count);
+        foreach (var box in _goalBoxes)
+        {
+            if (box == null) continue;
+            statuses.Add(new LevelGoalsView.GoalStatus(box.GoalType, box.CurrentAmount, box.GoalAmount));
+        }
+
+        return statuses;
     }
 
     void OnDestroy()

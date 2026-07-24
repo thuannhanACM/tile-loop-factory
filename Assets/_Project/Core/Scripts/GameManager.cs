@@ -14,8 +14,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] private int _maxFrameRate = 60;
     [SerializeField] private Transform[] _slotAnchors = new Transform[4];
     [SerializeField] private float _flyToSlotDuration = 0.3f;
-    [SerializeField] private LevelGoalsView _goalsView;
-    [SerializeField] private Canvas _uiCanvas;
+    [SerializeField] private float _clickPopupHeight = 0.5f;
+    [SerializeField] private float _clickPopupDuration = 0.15f;
     [SerializeField] private float _matchPunchStrength = 0.3f;
     [SerializeField] private float _matchPunchDuration = 0.3f;
     [SerializeField] private float _collectFlyDuration = 0.4f;
@@ -29,6 +29,8 @@ public class GameManager : MonoBehaviour
     private bool _hasWon;
     private LevelController _currentLevelController;
     private LevelConfig _currentLevelConfig;
+    private float _timeRemaining;
+    private bool _timerActive;
 
     void Start()
     {
@@ -71,6 +73,23 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    void Update()
+    {
+        if (!_timerActive || _isGameOver || _hasWon) return;
+
+        _timeRemaining -= Time.deltaTime;
+        if (_timeRemaining <= 0f)
+        {
+            _timeRemaining = 0f;
+            _timerActive = false;
+            UIManager.Instance?.UpdateTimer(_timeRemaining);
+            TriggerGameOver();
+            return;
+        }
+
+        UIManager.Instance?.UpdateTimer(_timeRemaining);
+    }
+
     private void OnStartGameClicked()
     {
         _homeView.Hide();
@@ -99,14 +118,9 @@ public class GameManager : MonoBehaviour
 
         UIManager.Instance.ShowLevelName(levelConfig.LevelName);
 
-        if (_goalsView == null)
-        {
-            GameDebug.LogWarning("_goalsView is not assigned on GameManager — goal UI will not spawn.", LogTopic.UI);
-        }
-        else
-        {
-            _goalsView.Setup(levelConfig.CollectGoals);
-        }
+        _timeRemaining = levelConfig.TimeLimitSeconds;
+        _timerActive = true;
+        UIManager.Instance.UpdateTimer(_timeRemaining);
     }
 
     private void OnTileRemovedFromConveyor(TileItem tile, TileRemovalReason reason)
@@ -146,7 +160,14 @@ public class GameManager : MonoBehaviour
         if (targetIndex < 0 || targetIndex >= _slotOccupants.Length) return false;
 
         _slotOccupants[targetIndex] = tile;
-        MoveTileToSlot(tile, targetIndex, () => CheckForMatch(tile.Type));
+
+        var anchor = _slotAnchors[targetIndex];
+        tile.PlayClickPopupThenFly(anchor.position, _clickPopupHeight, _clickPopupDuration, _flyToSlotDuration, () =>
+        {
+            tile.transform.SetParent(anchor);
+            CheckForMatch(tile.Type);
+        });
+
         return true;
     }
 
@@ -182,10 +203,12 @@ public class GameManager : MonoBehaviour
     {
         if (_isGameOver) return;
         _isGameOver = true;
+        _timerActive = false;
+        UIManager.Instance?.ResetTension();
 
         Time.timeScale = 0f;
 
-        var statuses = _goalsView != null ? _goalsView.GetStatuses() : new List<LevelGoalsView.GoalStatus>();
+        var statuses = _currentLevelController != null ? _currentLevelController.GetGoalStatuses() : new List<LevelGoalsView.GoalStatus>();
         _gameOverView?.Show(statuses);
     }
 
@@ -200,26 +223,20 @@ public class GameManager : MonoBehaviour
         LoadLevel(levelToReload);
     }
 
-    /// <summary>Checks whether every collect goal has reached its target amount; if so, triggers the win screen.</summary>
+    /// <summary>Checks whether every goal box in the level is complete; if so, triggers the win screen.</summary>
     private void CheckForWin()
     {
-        if (_goalsView == null) return;
+        if (_currentLevelController == null || !_currentLevelController.AreAllGoalsComplete()) return;
 
-        var statuses = _goalsView.GetStatuses();
-        if (statuses.Count == 0) return;
-
-        foreach (var status in statuses)
-        {
-            if (status.Current < status.Goal) return;
-        }
-
-        TriggerWin(statuses);
+        TriggerWin(_currentLevelController.GetGoalStatuses());
     }
 
     private void TriggerWin(List<LevelGoalsView.GoalStatus> statuses)
     {
         if (_hasWon) return;
         _hasWon = true;
+        _timerActive = false;
+        UIManager.Instance?.ResetTension();
 
         Time.timeScale = 0f;
 
@@ -240,11 +257,12 @@ public class GameManager : MonoBehaviour
     private void OnBackToHomeClicked()
     {
         _hasWon = false;
+        _timerActive = false;
+        UIManager.Instance?.ResetTension();
         Time.timeScale = 1f;
         _gameWinView?.Hide();
 
         CleanupCurrentLevel();
-        _goalsView?.Setup(new List<LevelConfig.TileTypeCount>());
         _gameComponents?.SetActive(false);
         _homeView?.Show();
     }
@@ -289,17 +307,20 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        var goalView = _goalsView != null ? _goalsView.GetView(type) : null;
+        var box = _currentLevelController != null ? _currentLevelController.PickGoalBox(type) : null;
 
         foreach (var tile in matched)
         {
-            var targetPosition = goalView != null
-                ? GetWorldPositionForUI(goalView.ViewPoint, tile.transform.position)
-                : tile.transform.position;
+            var targetPosition = box != null ? box.transform.position : tile.transform.position;
 
             tile.PlayCollectSequence(targetPosition, _matchPunchStrength, _matchPunchDuration, _collectFlyDuration, () =>
             {
-                _goalsView?.ReportCollected(type);
+                if (box != null)
+                {
+                    box.AddProgress(type);
+                    box.PlayHitReaction();
+                }
+
                 PoolObjectManager.Instance.Release(tile);
                 CheckForWin();
             });
@@ -326,21 +347,6 @@ public class GameManager : MonoBehaviour
         {
             MoveTileToSlot(remaining[i], i);
         }
-    }
-
-    /// <summary>Converts a UI element's screen position into a world position at the same camera-distance as referenceWorldPosition.</summary>
-    private Vector3 GetWorldPositionForUI(RectTransform uiTarget, Vector3 referenceWorldPosition)
-    {
-        var worldCamera = Camera.main;
-        if (worldCamera == null) return uiTarget.position;
-
-        var uiCamera = _uiCanvas != null && _uiCanvas.renderMode != RenderMode.ScreenSpaceOverlay
-            ? _uiCanvas.worldCamera
-            : null;
-
-        Vector3 screenPoint = RectTransformUtility.WorldToScreenPoint(uiCamera, uiTarget.position);
-        screenPoint.z = worldCamera.WorldToScreenPoint(referenceWorldPosition).z;
-        return worldCamera.ScreenToWorldPoint(screenPoint);
     }
 
     /// <summary>Flies a tile to the given slot's anchor, reparenting it there once the tween completes.</summary>

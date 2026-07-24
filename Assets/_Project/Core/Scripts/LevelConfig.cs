@@ -17,13 +17,13 @@ public class LevelConfig : ScriptableObject
 
     [SerializeField] private string _levelName;
     [SerializeField] private LevelController _levelPrefab;
+    [SerializeField] private float _timeLimitSeconds = 60f;
     [SerializeField] private List<TileTypeCount> _tileSpawns = new();
-    [SerializeField] private List<TileTypeCount> _collectGoals = new();
 
     public string LevelName => _levelName;
     public LevelController LevelPrefab => _levelPrefab;
+    public float TimeLimitSeconds => _timeLimitSeconds;
     public IReadOnlyList<TileTypeCount> TileSpawns => _tileSpawns;
-    public IReadOnlyList<TileTypeCount> CollectGoals => _collectGoals;
 
     public int TotalTileCount
     {

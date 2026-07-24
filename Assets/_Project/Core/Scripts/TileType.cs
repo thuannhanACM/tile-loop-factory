@@ -11,3 +11,4 @@ public class TileType : ScriptableObject
     public Sprite Icon => _icon;
     public Color Color => _color;
 }
+

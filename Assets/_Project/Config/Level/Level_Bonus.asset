@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Core::LevelConfig
   _levelName: Level Bonus
   _levelPrefab: {fileID: 3894047865709179115, guid: d2c306122dadfb2458776e59875ff76a, type: 3}
+  _timeLimitSeconds: 99999
   _tileSpawns:
   - _type: {fileID: 11400000, guid: dbe9c8476769c09439836f96d31fac9f, type: 2}
     _count: 3
