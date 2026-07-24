@@ -4,13 +4,15 @@ using UnityEngine;
 
 public class TileItem : BeltItem
 {
-    private const float LandingPunchStrength = 0.25f;
-    private const float LandingPunchDuration = 0.2f;
+    private const float CurveBowMin = 0.15f;
+    private const float CurveBowMax = 0.35f;
 
     [SerializeField] private SpriteRenderer _spriteRenderer;
     [SerializeField] private Renderer _renderer;
+    [SerializeField] private ParticleSystem _clickVfxPrefab;
 
     private TileType _type;
+    private bool _clicked;
     public TileType Type => _type;
     public event Action<TileItem> Clicked;
 
@@ -21,6 +23,11 @@ public class TileItem : BeltItem
 
     void OnMouseDown()
     {
+        // A tile can only be claimed once; ignore any further clicks until it's
+        // recycled through the pool (see ResetForSpawn).
+        if (_clicked) return;
+        _clicked = true;
+
         // Kill every tween tagged to this tile (including ones nested inside a
         // Sequence, e.g. the near-end punch/shrink) before anything else, so the
         // click's own animation (fly-to-slot) always starts from a clean, fully
@@ -28,7 +35,18 @@ public class TileItem : BeltItem
         KillAllTweens();
         transform.localScale = Vector3.one;
 
+        if (_clickVfxPrefab != null && VfxPool.Instance != null)
+        {
+            VfxPool.Instance.Play(_clickVfxPrefab, transform.position);
+        }
+
         Clicked?.Invoke(this);
+    }
+
+    /// <summary>Clears the clicked state so a pooled tile is clickable again on its next spawn.</summary>
+    public void ResetForSpawn()
+    {
+        _clicked = false;
     }
 
     /// <summary>Kills every tween/sequence this tile has started, wherever it is in its lifecycle.</summary>
@@ -37,13 +55,36 @@ public class TileItem : BeltItem
         DOTween.Kill(this);
     }
 
+    /// <summary>A curved (CatmullRom) move to targetPosition, bowing sideways by a random angle around
+    /// the travel direction so every flight arcs differently.</summary>
+    private Tweener BuildCurvedMove(Vector3 targetPosition, float duration)
+    {
+        var start = transform.position;
+        var delta = targetPosition - start;
+        var distance = delta.magnitude;
+
+        var control = (start + targetPosition) * 0.5f;
+        if (distance > 0.0001f)
+        {
+            var dir = delta / distance;
+            var perp = Vector3.Cross(dir, Vector3.up);
+            if (perp.sqrMagnitude < 0.0001f) perp = Vector3.Cross(dir, Vector3.forward);
+            perp.Normalize();
+
+            // Random angle around the travel direction picks a random side/plane for the bow.
+            perp = Quaternion.AngleAxis(UnityEngine.Random.Range(0f, 360f), dir) * perp;
+            control += perp * (distance * UnityEngine.Random.Range(CurveBowMin, CurveBowMax));
+        }
+
+        return transform.DOPath(new[] { control, targetPosition }, duration, PathType.CatmullRom);
+    }
+
     public void FlyTo(Vector3 targetPosition, float duration, Action onComplete = null)
     {
         KillAllTweens();
 
         var sequence = DOTween.Sequence().SetId(this);
-        sequence.Append(transform.DOMove(targetPosition, duration).SetEase(Ease.OutQuad));
-        sequence.Append(transform.DOPunchScale(Vector3.one * LandingPunchStrength, LandingPunchDuration, 6, 1f));
+        sequence.Append(BuildCurvedMove(targetPosition, duration).SetEase(Ease.OutQuad));
         sequence.OnComplete(() => onComplete?.Invoke());
     }
 
@@ -57,8 +98,7 @@ public class TileItem : BeltItem
         var sequence = DOTween.Sequence().SetId(this);
         sequence.Append(transform.DOMove(popupPosition, popupDuration).SetEase(Ease.OutQuad));
         sequence.Join(transform.DOPunchScale(Vector3.one * 0.2f, popupDuration, 1, 0f));
-        sequence.Append(transform.DOMove(targetPosition, flyDuration).SetEase(Ease.InQuad));
-        sequence.Append(transform.DOPunchScale(Vector3.one * LandingPunchStrength, LandingPunchDuration, 6, 1f));
+        sequence.Append(BuildCurvedMove(targetPosition, flyDuration).SetEase(Ease.InQuad));
         sequence.OnComplete(() => onComplete?.Invoke());
     }
 
@@ -87,7 +127,7 @@ public class TileItem : BeltItem
 
         var sequence = DOTween.Sequence().SetId(this);
         sequence.Append(transform.DOPunchPosition(Vector3.up * punchStrength, punchDuration, 6, 1f));
-        sequence.Append(transform.DOMove(targetPosition, flyDuration));
+        sequence.Append(BuildCurvedMove(targetPosition, flyDuration));
         sequence.Join(transform.DOScale(Vector3.zero, flyDuration));
         sequence.OnComplete(() => onComplete?.Invoke());
     }

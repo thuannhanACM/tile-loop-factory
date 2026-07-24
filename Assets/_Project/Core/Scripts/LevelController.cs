@@ -44,6 +44,21 @@ public class LevelController : MonoBehaviour
         }
     }
 
+    /// <summary>True if at least one goal box tracking this TileType is currently Unlocked and still
+    /// accepting progress — the requirement for that type to be matchable.</summary>
+    public bool HasUnlockedGoalBox(TileType type)
+    {
+        foreach (var box in _goalBoxes)
+        {
+            if (box != null && box.GoalType == type && box.State == TileGoalBox.BoxState.Unlocked && !box.IsComplete)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Picks the single box every tile in a match batch should fly to for the given TileType.
     /// Among boxes tracking that type, prefers the Unlocked, not-yet-complete one closest to

@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 958c55d078b5f0346a1ee531b0b1f19c
+guid: da55b6dbda763f44cb459060468022a1
 NativeFormatImporter:
   externalObjects: {}
   mainObjectFileID: 2100000
@@ -8,8 +8,8 @@ NativeFormatImporter:
   assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
-  productId: 301834
-  packageName: Cardboard Box (Rigged)
+  productId: 317348
+  packageName: Comic Explosion Effect
   packageVersion: 1.0
-  assetPath: Assets/_Project/Art/Materials/CardBox/SideMat.mat
-  uploadId: 706380
+  assetPath: Assets/CartoonVFX9x/Comic_FX/Materials/Star_Color.mat
+  uploadId: 749130

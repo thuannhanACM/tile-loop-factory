@@ -24,9 +24,13 @@ public class UIManager : MonoBehaviour
     [SerializeField] private float _tickPitchMin = 1f;
     [SerializeField] private float _tickPitchMax = 1.6f;
 
+    [Header("Tension (tray fill)")]
+    [SerializeField] private int _trayTensionStartCount = 2;
+
     private float _fpsTimer;
     private int _frameCount;
     private int _lastTickSecond = -1;
+    private float _trayTension;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -58,10 +62,25 @@ public class UIManager : MonoBehaviour
         UpdateTension(secondsRemaining);
     }
 
+    /// <summary>Updates how "full" the tray is (drives one half of the tension). Ramps from
+    /// _trayTensionStartCount tiles up to a full tray; below the start count there is no tray tension.</summary>
+    public void SetTrayTension(int tileCount, int traySize)
+    {
+        if (tileCount < _trayTensionStartCount || traySize <= _trayTensionStartCount)
+        {
+            _trayTension = 0f;
+            return;
+        }
+
+        // Onset at the start count, reaching 1 when the tray is full.
+        _trayTension = Mathf.Clamp01((float)(tileCount - _trayTensionStartCount + 1) / (traySize - _trayTensionStartCount + 1));
+    }
+
     /// <summary>Resets all tension feedback to its idle state (call on game over / win / returning to menu).</summary>
     public void ResetTension()
     {
         _lastTickSecond = -1;
+        _trayTension = 0f;
 
         if (_timerText != null) _timerText.color = _timerNormalColor;
         SetDangerOverlayAlpha(0f);
@@ -69,33 +88,43 @@ public class UIManager : MonoBehaviour
 
     private void UpdateTension(float secondsRemaining)
     {
-        bool urgent = secondsRemaining > 0f && secondsRemaining <= _urgentThresholdSeconds;
-        if (!urgent)
+        float timeTension = 0f;
+        if (secondsRemaining > 0f && secondsRemaining <= _urgentThresholdSeconds)
         {
-            if (_lastTickSecond != -1) ResetTension();
+            timeTension = 1f - Mathf.Clamp01(secondsRemaining / _urgentThresholdSeconds);
+        }
+
+        // Overall suspense is the stronger of the two pressures: dwindling time and a filling tray.
+        float tension = Mathf.Max(timeTension, _trayTension);
+
+        if (tension <= 0f)
+        {
+            ResetTension();
             return;
         }
 
-        float tensionRatio = 1f - Mathf.Clamp01(secondsRemaining / _urgentThresholdSeconds);
-
         if (_timerText != null)
         {
-            _timerText.color = Color.Lerp(_timerNormalColor, _timerUrgentColor, tensionRatio);
+            _timerText.color = Color.Lerp(_timerNormalColor, _timerUrgentColor, tension);
         }
 
         if (_dangerOverlay != null)
         {
-            float pulseFrequency = Mathf.Lerp(2f, 6f, tensionRatio);
+            float pulseFrequency = Mathf.Lerp(2f, 6f, tension);
             float pulse = Mathf.Sin(Time.unscaledTime * pulseFrequency * Mathf.PI * 2f) * 0.5f + 0.5f;
-            SetDangerOverlayAlpha(Mathf.Lerp(0f, _dangerOverlayMaxAlpha, tensionRatio) * pulse);
+            SetDangerOverlayAlpha(Mathf.Lerp(0f, _dangerOverlayMaxAlpha, tension) * pulse);
         }
 
-        int currentSecond = Mathf.CeilToInt(secondsRemaining);
-        if (currentSecond != _lastTickSecond)
+        // The tick + punch are literal clock ticks — only while the countdown itself is in the urgent window.
+        if (timeTension > 0f)
         {
-            _lastTickSecond = currentSecond;
-            PlayTick(tensionRatio);
-            PunchTimerText();
+            int currentSecond = Mathf.CeilToInt(secondsRemaining);
+            if (currentSecond != _lastTickSecond)
+            {
+                _lastTickSecond = currentSecond;
+                PlayTick(tension);
+                PunchTimerText();
+            }
         }
     }
 

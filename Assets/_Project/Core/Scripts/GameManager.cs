@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DG.Tweening;
 using UnityEngine;
 
 public class GameManager : MonoBehaviour
@@ -19,10 +20,14 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float _matchPunchStrength = 0.3f;
     [SerializeField] private float _matchPunchDuration = 0.3f;
     [SerializeField] private float _collectFlyDuration = 0.4f;
+    [SerializeField] private float _compactDelaySeconds = 0.5f;
+    [SerializeField] private float _slotPunchStrength = 0.25f;
+    [SerializeField] private float _slotPunchDuration = 0.2f;
     [SerializeField] private GameOverView _gameOverView;
     [SerializeField] private GameWinView _gameWinView;
     [SerializeField] private HomeView _homeView;
     [SerializeField] private GameObject _gameComponents;
+    [SerializeField] private int _levelIndex;
 
     private TileItem[] _slotOccupants;
     private bool _isGameOver;
@@ -69,7 +74,8 @@ public class GameManager : MonoBehaviour
         else
         {
             _gameComponents?.SetActive(true);
-            LoadLevel(_gameConfig != null ? _gameConfig.Level : null);
+            var level = _gameConfig != null ? _gameConfig.Levels.Length > _levelIndex ? _gameConfig.Levels[_levelIndex] : _gameConfig.Levels[0] : null;
+            LoadLevel(level);
         }
     }
 
@@ -94,7 +100,8 @@ public class GameManager : MonoBehaviour
     {
         _homeView.Hide();
         _gameComponents?.SetActive(true);
-        LoadLevel(_gameConfig != null ? _gameConfig.Level : null);
+        var level = _gameConfig != null ? _gameConfig.Levels.Length > _levelIndex ? _gameConfig.Levels[_levelIndex] : _gameConfig.Levels[0] : null;
+        LoadLevel(level);
     }
 
     private void LoadLevel(LevelConfig levelConfig)
@@ -125,10 +132,57 @@ public class GameManager : MonoBehaviour
 
     private void OnTileRemovedFromConveyor(TileItem tile, TileRemovalReason reason)
     {
-        if (reason == TileRemovalReason.Clicked)
+        if (reason != TileRemovalReason.Clicked) return;
+
+        // Decide before moving the tile: if this click completes a set, the new tile and its
+        // same-type mates already in the tray all fly straight to the goal box.
+        if (IsMatching(tile.Type))
+        {
+            CollectMatch(tile);
+        }
+        else if (FindFirstEmptyIndex() < 0)
+        {
+            // No match and no free slot left to hold the tile — the tray is jammed, level lost.
+            TriggerGameOver();
+        }
+        else
         {
             TryPlaceTileInSlot(tile);
         }
+    }
+
+    private int CountInTray(TileType type)
+    {
+        int count = 0;
+        foreach (var occupant in _slotOccupants)
+        {
+            if (occupant != null && occupant.Type == type) count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>A click matches only when it completes a set (this tile + its tray mates reach MatchCount)
+    /// AND the level has an unlocked goal box of that type ready to receive it.</summary>
+    private bool IsMatching(TileType type)
+    {
+        return CountInTray(type) + 1 >= MatchCount
+            && _currentLevelController != null
+            && _currentLevelController.HasUnlockedGoalBox(type);
+    }
+
+    /// <summary>Pushes the current tray fill to the UI so tension can rise with the number of tiles held.</summary>
+    private void NotifyTrayTension()
+    {
+        if (UIManager.Instance == null) return;
+
+        int count = 0;
+        foreach (var occupant in _slotOccupants)
+        {
+            if (occupant != null) count++;
+        }
+
+        UIManager.Instance.SetTrayTension(count, _slotOccupants.Length);
     }
 
     /// <summary>
@@ -160,40 +214,51 @@ public class GameManager : MonoBehaviour
         if (targetIndex < 0 || targetIndex >= _slotOccupants.Length) return false;
 
         _slotOccupants[targetIndex] = tile;
+        NotifyTrayTension();
 
         var anchor = _slotAnchors[targetIndex];
         tile.PlayClickPopupThenFly(anchor.position, _clickPopupHeight, _clickPopupDuration, _flyToSlotDuration, () =>
         {
             tile.transform.SetParent(anchor);
-            CheckForMatch(tile.Type);
+            PunchSlot(anchor);
+
+            if (IsBoardDead()) TriggerGameOver();
         });
 
         return true;
     }
 
-    private void CheckForMatch(TileType type)
+    /// <summary>The board can no longer produce a combo. Two ways it dies:
+    /// (1) MatchCount tiles whose types have no unlocked box (any mix of types) are stuck — they can
+    /// never clear and leave too few slots to assemble another combo; or (2) a full tray where no type
+    /// is one tile short of matching into an unlocked box.</summary>
+    private bool IsBoardDead()
     {
-        int count = 0;
+        int stuck = 0;
         foreach (var occupant in _slotOccupants)
         {
-            if (occupant != null && occupant.Type == type) count++;
+            if (occupant == null) continue;
+            if (_currentLevelController == null || !_currentLevelController.HasUnlockedGoalBox(occupant.Type)) stuck++;
         }
 
-        if (count >= MatchCount)
-        {
-            ClearMatchedTiles(type);
-        }
-        else if (IsTrayFull())
-        {
-            TriggerGameOver();
-        }
+        if (stuck >= MatchCount) return true;
+
+        return IsTrayDeadlocked();
     }
 
-    private bool IsTrayFull()
+    /// <summary>True when the tray is full and no type in it can still be matched — i.e. no type has
+    /// enough tiles AND an unlocked goal box, so no possible next tile could ever complete a combo
+    /// (and there is no room to place it either).</summary>
+    private bool IsTrayDeadlocked()
     {
         foreach (var occupant in _slotOccupants)
         {
-            if (occupant == null) return false;
+            if (occupant == null) return false; // still room to build toward a match
+        }
+
+        foreach (var occupant in _slotOccupants)
+        {
+            if (IsMatching(occupant.Type)) return false; // one more of this type would combo into an unlocked box
         }
 
         return true;
@@ -201,7 +266,8 @@ public class GameManager : MonoBehaviour
 
     private void TriggerGameOver()
     {
-        if (_isGameOver) return;
+        // Once the level is won (win pending or shown), a late tray-full must not flip it to game over.
+        if (_isGameOver || _hasWon) return;
         _isGameOver = true;
         _timerActive = false;
         UIManager.Instance?.ResetTension();
@@ -223,23 +289,42 @@ public class GameManager : MonoBehaviour
         LoadLevel(levelToReload);
     }
 
-    /// <summary>Checks whether every goal box in the level is complete; if so, triggers the win screen.</summary>
-    private void CheckForWin()
-    {
-        if (_currentLevelController == null || !_currentLevelController.AreAllGoalsComplete()) return;
-
-        TriggerWin(_currentLevelController.GetGoalStatuses());
-    }
-
-    private void TriggerWin(List<LevelGoalsView.GoalStatus> statuses)
+    /// <summary>
+    /// Checks whether every goal box is complete. When the level is won, the countdown stops
+    /// immediately but the win screen is deferred until the final box finishes vanishing.
+    /// </summary>
+    private void CheckForWin(TileGoalBox lastBox)
     {
         if (_hasWon) return;
+        if (_currentLevelController == null || !_currentLevelController.AreAllGoalsComplete()) return;
+
+        // Win is decided: freeze the countdown right away, but let the last box play out its
+        // vanish animation before showing the win screen.
         _hasWon = true;
         _timerActive = false;
         UIManager.Instance?.ResetTension();
 
+        if (lastBox != null && lastBox.gameObject.activeSelf)
+        {
+            lastBox.Vanished += OnFinalBoxVanished;
+        }
+        else
+        {
+            ShowWinScreen();
+        }
+    }
+
+    private void OnFinalBoxVanished(TileGoalBox box)
+    {
+        box.Vanished -= OnFinalBoxVanished;
+        ShowWinScreen();
+    }
+
+    private void ShowWinScreen()
+    {
         Time.timeScale = 0f;
 
+        var statuses = _currentLevelController != null ? _currentLevelController.GetGoalStatuses() : new List<LevelGoalsView.GoalStatus>();
         bool isBonusLevel = _gameConfig != null && _currentLevelConfig == _gameConfig.BonusLevel;
         _gameWinView?.Show(statuses, !isBonusLevel);
     }
@@ -292,13 +377,18 @@ public class GameManager : MonoBehaviour
                 _slotOccupants[i] = null;
             }
         }
+
+        NotifyTrayTension();
     }
 
-    private void ClearMatchedTiles(TileType type)
+    /// <summary>Flies the freshly clicked tile together with its same-type mates in the tray to the goal box.</summary>
+    private void CollectMatch(TileItem newTile)
     {
+        var type = newTile.Type;
         var matched = new List<TileItem>(MatchCount);
 
-        for (int i = 0; i < _slotOccupants.Length && matched.Count < MatchCount; i++)
+        // Pull the same-type tiles already sitting in the tray...
+        for (int i = 0; i < _slotOccupants.Length; i++)
         {
             if (_slotOccupants[i] != null && _slotOccupants[i].Type == type)
             {
@@ -306,6 +396,10 @@ public class GameManager : MonoBehaviour
                 _slotOccupants[i] = null;
             }
         }
+
+        // ...plus the newly clicked tile, which never entered a slot.
+        matched.Add(newTile);
+        NotifyTrayTension();
 
         var box = _currentLevelController != null ? _currentLevelController.PickGoalBox(type) : null;
 
@@ -322,11 +416,12 @@ public class GameManager : MonoBehaviour
                 }
 
                 PoolObjectManager.Instance.Release(tile);
-                CheckForWin();
+                CheckForWin(box);
             });
         }
 
-        CompactSlots();
+        // Let the matched tiles clear the tray first, then slide the survivors forward.
+        DOVirtual.DelayedCall(_compactDelaySeconds, CompactSlots);
     }
 
     /// <summary>Shifts every remaining occupant forward to fill the gaps left by a match.</summary>
@@ -356,8 +451,19 @@ public class GameManager : MonoBehaviour
         tile.FlyTo(anchor.position, _flyToSlotDuration, () =>
         {
             tile.transform.SetParent(anchor);
+            PunchSlot(anchor);
             onComplete?.Invoke();
         });
+    }
+
+    /// <summary>Punch-scales the slot anchor (and the tile now parented to it) as the tile lands.</summary>
+    private void PunchSlot(Transform anchor)
+    {
+        if (anchor == null) return;
+
+        // Finish any in-flight punch first so rapid re-landings don't stack or drift the scale.
+        anchor.DOComplete();
+        anchor.DOPunchScale(Vector3.one * _slotPunchStrength, _slotPunchDuration, 6, 1f);
     }
 
     private int FindLastIndexOfType(TileType type)

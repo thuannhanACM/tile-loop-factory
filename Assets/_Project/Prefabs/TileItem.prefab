@@ -48,6 +48,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Core::TileItem
   _spriteRenderer: {fileID: 7916279718838117445}
   _renderer: {fileID: 5631530220116439878}
+  _clickVfxPrefab: {fileID: 4250298743439401353, guid: 90c10503af98e7f419e295ba78992f74, type: 3}
 --- !u!65 &5717220016715137294
 BoxCollider:
   m_ObjectHideFlags: 0

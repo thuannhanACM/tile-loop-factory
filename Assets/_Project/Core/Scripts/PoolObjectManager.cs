@@ -26,10 +26,13 @@ public class PoolObjectManager : MonoBehaviour
             var tile = _pool.Dequeue();
             tile.transform.SetParent(parent);
             tile.transform.localScale = Vector3.one;
+            tile.ResetForSpawn();
             return tile;
         }
 
-        return Instantiate(_prefab, parent);
+        var fresh = Instantiate(_prefab, parent);
+        fresh.ResetForSpawn();
+        return fresh;
     }
 
     public void Release(TileItem tile)

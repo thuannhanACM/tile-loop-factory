@@ -33,7 +33,8 @@ public class TileGoalBox : MonoBehaviour
     [SerializeField] private float _vanishShakeStrength = 0.2f;
     [SerializeField] private float _vanishShakeRotation = 25f;
     [SerializeField] private int _vanishShakeVibrato = 20;
-    [SerializeField] private GameObject _vanishVfxPrefab;
+    [SerializeField] private float _vanishRiseHeight = 0.5f;
+    [SerializeField] private ParticleSystem _vanishVfxPrefab;
 
     private int _currentAmount;
     private GoalBubble _activeBubble;
@@ -52,6 +53,9 @@ public class TileGoalBox : MonoBehaviour
 
     /// <summary>Raised whenever CurrentAmount changes, so displays (e.g. GoalBubble) can refresh.</summary>
     public event Action<TileGoalBox> ProgressChanged;
+
+    /// <summary>Raised after the completion vanish sequence finishes and the box has disappeared.</summary>
+    public event Action<TileGoalBox> Vanished;
 
     /// <summary>Sets the goal this box tracks. Call before Unlock().</summary>
     public void Setup(TileType goalType, int goalAmount)
@@ -157,19 +161,28 @@ public class TileGoalBox : MonoBehaviour
         var sequence = DOTween.Sequence().SetTarget(transform);
         sequence.Append(transform.DOShakePosition(_vanishShakeDuration, _vanishShakeStrength, _vanishShakeVibrato, 90f, false, false));
         sequence.Join(transform.DOShakeRotation(_vanishShakeDuration, Vector3.one * _vanishShakeRotation, _vanishShakeVibrato));
+        // Blendable move adds the rise on top of the shake (same position property) without fighting it.
+        sequence.Join(transform.DOBlendableMoveBy(Vector3.up * _vanishRiseHeight, _vanishShakeDuration).SetEase(Ease.OutQuad));
         sequence.OnComplete(() =>
         {
-            SpawnVanishVfx();
+            var vfxPosition = transform.position;
             gameObject.SetActive(false);
+            PlayVanishVfxThenSignal(vfxPosition);
         });
     }
 
-    /// <summary>Spawns the placeholder vanish VFX at the box's world position (parented to the level, not the box, so it survives the box being hidden).</summary>
-    private void SpawnVanishVfx()
+    /// <summary>Plays the pooled vanish VFX at the box's position (pool-owned, so it outlives the hidden box),
+    /// then raises Vanished only once that VFX has finished playing.</summary>
+    private void PlayVanishVfxThenSignal(Vector3 worldPosition)
     {
-        if (_vanishVfxPrefab == null) return;
-
-        Instantiate(_vanishVfxPrefab, transform.position, Quaternion.identity, transform.parent);
+        if (_vanishVfxPrefab != null && VfxPool.Instance != null)
+        {
+            VfxPool.Instance.Play(_vanishVfxPrefab, worldPosition, () => Vanished?.Invoke(this));
+        }
+        else
+        {
+            Vanished?.Invoke(this);
+        }
     }
 
     private void Reset()

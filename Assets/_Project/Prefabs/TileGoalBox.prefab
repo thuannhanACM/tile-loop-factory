@@ -454,7 +454,8 @@ MonoBehaviour:
   _vanishShakeStrength: 0.1
   _vanishShakeRotation: 12
   _vanishShakeVibrato: 20
-  _vanishVfxPrefab: {fileID: 6800788699755919309, guid: bc5e4752a5df11a44ac8e90d08b46fa5, type: 3}
+  _vanishRiseHeight: 1
+  _vanishVfxPrefab: {fileID: 4250298743439401353, guid: 28a73ce6e4625044091993d54b43e1c6, type: 3}
 --- !u!1 &4272103371328325741
 GameObject:
   m_ObjectHideFlags: 0

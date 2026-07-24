@@ -12,5 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cec28d247516b334091d410e04208249, type: 3}
   m_Name: GameConfig
   m_EditorClassIdentifier: Core::GameConfig
-  _level: {fileID: 11400000, guid: 7c012c6c00db4ea4d857cfae84401142, type: 2}
+  levels:
+  - {fileID: 11400000, guid: 7c012c6c00db4ea4d857cfae84401142, type: 2}
+  - {fileID: 11400000, guid: 079ef64fa33ac1a488aa2457fb0ea00f, type: 2}
   _bonusLevel: {fileID: 11400000, guid: fc9ccab01e58eaf4092ed2dc469470cc, type: 2}

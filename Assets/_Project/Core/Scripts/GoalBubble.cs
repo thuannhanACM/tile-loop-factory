@@ -11,6 +11,8 @@ public class GoalBubble : MonoBehaviour
 {
     [SerializeField] private SpriteRenderer _icon;
     [SerializeField] private TextMeshPro _amountText;
+    [SerializeField] private float _floatAmplitude = 0.06f;
+    [SerializeField] private float _floatCycleDuration = 2f;
 
     private TileGoalBox _goalBox;
 
@@ -31,6 +33,24 @@ public class GoalBubble : MonoBehaviour
             _goalBox.ProgressChanged += Refresh;
             Refresh(_goalBox);
         }
+
+        StartFloating();
+    }
+
+    /// <summary>Gently bobs the bubble up and down forever, one full cycle every _floatCycleDuration seconds.</summary>
+    private void StartFloating()
+    {
+        transform.DOKill();
+
+        var basePos = transform.localPosition;
+        float half = _floatAmplitude * 0.5f;
+
+        // Centre the bob on the resting position: start slightly low, ease up and back down.
+        transform.localPosition = basePos + Vector3.down * half;
+        transform.DOLocalMoveY(basePos.y + half, _floatCycleDuration * 0.5f)
+            .SetEase(Ease.InOutSine)
+            .SetLoops(-1, LoopType.Yoyo)
+            .SetId(this);
     }
 
     /// <summary>Stops listening to the currently bound box (safe to call when not bound).</summary>
